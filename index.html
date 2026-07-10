@@ -3,132 +3,272 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>自訂義霓虹碼錶</title>
+
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
+    
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="apple-touch-icon.png">
-    <title>iOS 碼錶</title>
+    
+    <meta name="apple-mobile-web-app-title" content="霓虹碼錶">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* 引入多種字體供使用者切換 */
+        @import url('https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Inter:wght@700&family=Varela+Round&family=Righteous&family=Noto+Sans+TC:wght@400;700&display=swap');
+
+        /* 定義 CSS 變數來控制全局主題與字體 */
+        :root {
+            --theme-main: #22d3ee;       /* 亮色 (主文字/發光) */
+            --theme-border: #0891b2;     /* 暗色 (邊框/次要文字) */
+            --theme-dim: rgba(8, 145, 178, 0.3); /* 按下時的背景色 */
+            --theme-glow: rgba(34, 211, 238, 0.5); /* 陰影發光色 */
+            
+            --dynamic-font: 'Black Ops One', monospace;
+            --dynamic-tracking: 2px;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: black;
-            color: white;
-            /* 防止 iOS 上的預設反彈效果與選取 */
+            font-family: 'Noto Sans TC', -apple-system, sans-serif;
+            background-color: #000000;
+            color: #ffffff;
             overscroll-behavior-y: none;
             -webkit-user-select: none;
             user-select: none;
             -webkit-tap-highlight-color: transparent;
         }
         
-        /* 讓數字等寬，避免跳動 */
-        .tabular-nums {
+        /* 動態套用的字體類別 */
+        .dynamic-font {
+            font-family: var(--dynamic-font);
             font-variant-numeric: tabular-nums;
+            letter-spacing: var(--dynamic-tracking);
         }
 
-        /* 隱藏捲動軸但保留捲動功能 */
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+        /* 隱藏捲動軸 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* iOS 按鈕外圈效果 */
-        .btn-ring {
-            border: 2px solid transparent;
-            background-clip: padding-box;
+        /* 動態顏色類別 */
+        .text-theme { color: var(--theme-main); }
+        .text-theme-dark { color: var(--theme-border); }
+        .border-theme { border-color: var(--theme-main); }
+        .border-theme-dark { border-color: var(--theme-border); }
+        .shadow-theme-glow { text-shadow: 0 0 10px var(--theme-glow); }
+        .box-shadow-theme { box-shadow: 0 0 15px var(--theme-glow); }
+        .bg-theme-active:active { background-color: var(--theme-dim); }
+
+        /* 設定面板過場動畫 */
+        #settings-modal {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
-        /* 最快(綠)與最慢(紅)圈的顏色 */
-        .text-green-lap { color: #34c759; }
-        .text-red-lap { color: #ff3b30; }
+        /* 按鈕基礎樣式 */
+        .btn-wrapper {
+            padding: 4px;
+            border-radius: 9999px;
+            border: 2px solid transparent; 
+        }
+
+        /* 字型選擇器的活躍狀態 */
+        .font-option.active {
+            border-color: var(--theme-main);
+            color: var(--theme-main);
+        }
+        /* 顏色選擇器的活躍狀態 */
+        .color-option.active {
+            transform: scale(1.15);
+            border: 2px solid white;
+        }
     </style>
 </head>
-<body class="flex flex-col h-screen w-screen overflow-hidden">
+<body class="flex flex-col h-screen w-screen overflow-hidden bg-black relative">
 
-    <div class="flex justify-center items-center pb-2 px-6 pt-[calc(env(safe-area-inset-top)+16px)]">
-        <div id="taiwan-clock" class="text-white text-2xl font-bold tracking-wider bg-gray-800/80 border border-gray-600 px-6 py-2 rounded-full backdrop-blur-md tabular-nums shadow-lg">
-            載入中...
+    <button id="btn-settings" class="fixed top-6 right-6 z-50 text-white/50 hover:text-white transition-colors p-2 bg-white/10 rounded-full backdrop-blur-md active:scale-95">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+    </button>
+
+    <div class="flex flex-col justify-center items-center pt-14 pb-4 px-6 z-10 relative">
+        <div class="border-2 border-theme rounded-xl px-6 py-2 flex items-baseline tracking-widest box-shadow-theme transition-colors duration-300">
+            <span id="clock-hm" class="text-theme text-6xl dynamic-font shadow-theme-glow transition-colors duration-300">--:--</span>
+            <span id="clock-s" class="text-theme opacity-60 text-3xl dynamic-font ml-2 font-bold transition-colors duration-300">--</span>
+        </div>
+        <div id="clock-day" class="text-theme opacity-80 text-xl tracking-widest mt-3 font-bold transition-colors duration-300">載入中...</div>
+    </div>
+
+    <div class="flex justify-center items-center pt-2 pb-8 z-10">
+        <h1 id="main-timer" class="text-[5rem] md:text-[6rem] dynamic-font text-theme shadow-theme-glow leading-none transition-colors duration-300">
+            00:00.00
+        </h1>
+    </div>
+
+    <div class="flex justify-between px-8 pb-4 z-10">
+        <div class="btn-wrapper border-theme-dark transition-colors duration-300" id="btn-left-wrapper">
+            <button id="btn-left" class="w-16 h-16 md:w-20 md:h-20 rounded-full flex justify-center items-center bg-transparent border-2 border-theme-dark text-theme font-bold text-lg bg-theme-active transition-colors duration-300">
+                分圈
+            </button>
+        </div>
+        <div class="btn-wrapper border-theme transition-colors duration-300" id="btn-right-wrapper">
+            <button id="btn-right" class="w-16 h-16 md:w-20 md:h-20 rounded-full flex justify-center items-center bg-transparent border-2 border-theme text-theme font-bold text-lg bg-theme-active box-shadow-theme transition-colors duration-300">
+                開始
+            </button>
         </div>
     </div>
 
-    <div class="flex justify-center items-center pt-6 pb-10">
-        <h1 id="main-timer" class="text-[5.5rem] font-light tracking-tight tabular-nums" style="font-weight: 200;">00:00.00</h1>
-    </div>
-
-    <div class="flex justify-between px-6 pb-6">
-        <button id="btn-left" class="relative w-20 h-20 rounded-full flex justify-center items-center bg-[#333333] text-white/50 border-2 border-black ring-2 ring-[#333333] transition-opacity active:opacity-50">
-            <span class="text-[17px] tracking-wide">分圈</span>
-        </button>
-
-        <div class="flex items-center space-x-2 pb-4">
-            <div class="w-2 h-2 rounded-full bg-white"></div>
-            <div class="w-2 h-2 rounded-full bg-gray-600"></div>
-        </div>
-
-        <button id="btn-right" class="relative w-20 h-20 rounded-full flex justify-center items-center bg-[#1a3d1e] text-[#4cd964] border-2 border-black ring-2 ring-[#1a3d1e] transition-opacity active:opacity-50">
-            <span class="text-[17px] tracking-wide">開始</span>
-        </button>
-    </div>
-
-    <div class="flex-grow overflow-y-auto no-scrollbar px-4 mb-20 border-t border-gray-800">
+    <div class="flex-grow overflow-y-auto no-scrollbar px-6 pb-6 border-t border-theme-dark transition-colors duration-300 relative z-10">
         <div id="laps-container" class="flex flex-col">
-            </div>
+            <div class="text-center text-theme opacity-50 text-sm mt-8 tracking-widest transition-colors duration-300">SYSTEM READY</div>
+        </div>
     </div>
+    
+    <div class="fixed bottom-0 left-0 w-full h-8 bg-gradient-to-t from-black to-transparent pointer-events-none z-20"></div>
 
-    <div class="fixed bottom-0 left-0 w-full h-20 bg-black/90 backdrop-blur-lg flex justify-around items-center px-2 pb-6 pt-2 border-t border-gray-800/50">
-        <div class="flex flex-col items-center text-gray-500 space-y-1">
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            <span class="text-[10px]">世界時鐘</span>
+    <div id="settings-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+    
+    <div id="settings-modal" class="fixed bottom-0 left-0 w-full bg-[#1c1c1e] rounded-t-3xl p-6 z-50 transform translate-y-full flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+        
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-white text-lg font-bold tracking-wider">字型與顏色</h2>
+            <button id="btn-close-settings" class="bg-[#2c2c2e] rounded-full p-1.5 text-gray-400 hover:text-white transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
         </div>
-        <div class="flex flex-col items-center text-gray-500 space-y-1">
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            <span class="text-[10px]">鬧鐘</span>
+
+        <div class="flex justify-between items-center mb-8 px-2">
+            <div class="font-option active w-14 h-16 rounded-xl border-2 border-gray-600 flex justify-center items-center text-3xl text-gray-400 cursor-pointer transition-colors" data-font="'Black Ops One', monospace" data-tracking="2px" style="font-family: 'Black Ops One'">12</div>
+            <div class="font-option w-14 h-16 rounded-xl border-2 border-gray-600 flex justify-center items-center text-3xl text-gray-400 cursor-pointer transition-colors" data-font="'Righteous', cursive" data-tracking="1px" style="font-family: 'Righteous'">12</div>
+            <div class="font-option w-14 h-16 rounded-xl border-2 border-gray-600 flex justify-center items-center text-3xl text-gray-400 cursor-pointer transition-colors" data-font="'Inter', sans-serif" data-tracking="0px" style="font-family: 'Inter', sans-serif; font-weight: 700;">12</div>
+            <div class="font-option w-14 h-16 rounded-xl border-2 border-gray-600 flex justify-center items-center text-3xl text-gray-400 cursor-pointer transition-colors" data-font="'Varela Round', sans-serif" data-tracking="1px" style="font-family: 'Varela Round'">12</div>
         </div>
-        <div class="flex flex-col items-center text-[#ff9f0a] space-y-1">
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v2"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 5l-1.5 1.5"></path></svg>
-            <span class="text-[10px] font-semibold">碼錶</span>
-        </div>
-        <div class="flex flex-col items-center text-gray-500 space-y-1">
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            <span class="text-[10px]">計時器</span>
+
+        <div class="w-full h-[1px] bg-gray-700 mb-8"></div>
+
+        <div class="flex justify-between items-center px-1 pb-4 overflow-x-auto no-scrollbar space-x-4">
+            <div class="color-option active w-10 h-10 rounded-full cursor-pointer flex-shrink-0 transition-transform" style="background-color: #22d3ee;" data-theme="cyan"></div>
+            <div class="color-option w-10 h-10 rounded-full cursor-pointer flex-shrink-0 transition-transform" style="background-color: #4ade80;" data-theme="green"></div>
+            <div class="color-option w-10 h-10 rounded-full cursor-pointer flex-shrink-0 transition-transform" style="background-color: #fb923c;" data-theme="orange"></div>
+            <div class="color-option w-10 h-10 rounded-full cursor-pointer flex-shrink-0 transition-transform" style="background-color: #f87171;" data-theme="red"></div>
+            <div class="color-option w-10 h-10 rounded-full cursor-pointer flex-shrink-0 transition-transform" style="background-color: #60a5fa;" data-theme="blue"></div>
+            <div class="color-option w-10 h-10 rounded-full cursor-pointer flex-shrink-0 transition-transform" style="background-color: #f9fafb;" data-theme="white"></div>
         </div>
     </div>
-    <div class="fixed bottom-1 left-1/2 -translate-x-1/2 w-32 h-1 bg-white rounded-full"></div>
 
     <script>
-        // === 頂部台灣時間更新邏輯 ===
-        function updateClock() {
-            const now = new Date();
-            // 指定使用台北時區
-            const options = { timeZone: 'Asia/Taipei', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
-            const timeString = now.toLocaleTimeString('zh-TW', options);
-            document.getElementById('taiwan-clock').innerText = '台灣時間 ' + timeString;
-        }
-        setInterval(updateClock, 1000);
-        updateClock(); // 初始化立即呼叫一次
+        // === 主題配置表 (重新調配大眾高對比色系) ===
+        const themes = {
+            cyan: { main: '#22d3ee', border: '#0891b2', dim: 'rgba(8, 145, 178, 0.3)', glow: 'rgba(34, 211, 238, 0.5)' },
+            green: { main: '#4ade80', border: '#16a34a', dim: 'rgba(22, 163, 74, 0.3)', glow: 'rgba(74, 222, 128, 0.5)' },
+            orange: { main: '#fb923c', border: '#ea580c', dim: 'rgba(234, 88, 12, 0.3)', glow: 'rgba(251, 146, 60, 0.5)' },
+            red: { main: '#f87171', border: '#dc2626', dim: 'rgba(220, 38, 38, 0.3)', glow: 'rgba(248, 113, 113, 0.5)' },
+            blue: { main: '#60a5fa', border: '#2563eb', dim: 'rgba(37, 99, 235, 0.3)', glow: 'rgba(96, 165, 250, 0.5)' },
+            white: { main: '#ffffff', border: '#4b5563', dim: 'rgba(75, 85, 99, 0.3)', glow: 'rgba(255, 255, 255, 0.3)' }
+        };
 
-        // === 碼錶核心邏輯 ===
-        let isRunning = false;
-        let totalElapsedTime = 0;      // 總經過時間 (毫秒)
-        let currentLapElapsedTime = 0; // 當前這圈的經過時間 (毫秒)
-        let lastTickTime = 0;
-        let animationFrameId;
-        
-        // 儲存已完成的分圈
-        // 結構: { id: 1, lapTime: 1234, totalTime: 1234 }
-        let laps = []; 
-
+        // === DOM 元素 ===
         const DOM = {
             mainTimer: document.getElementById('main-timer'),
             btnLeft: document.getElementById('btn-left'),
+            btnLeftWrap: document.getElementById('btn-left-wrapper'),
             btnRight: document.getElementById('btn-right'),
-            lapsContainer: document.getElementById('laps-container')
+            btnRightWrap: document.getElementById('btn-right-wrapper'),
+            lapsContainer: document.getElementById('laps-container'),
+            
+            btnSettings: document.getElementById('btn-settings'),
+            btnCloseSettings: document.getElementById('btn-close-settings'),
+            settingsModal: document.getElementById('settings-modal'),
+            settingsOverlay: document.getElementById('settings-overlay'),
+            fontOptions: document.querySelectorAll('.font-option'),
+            colorOptions: document.querySelectorAll('.color-option'),
+            root: document.documentElement
         };
 
-        // 格式化時間 (將毫秒轉成 MM:SS.ms)
+        // === 設定面板邏輯 ===
+        function toggleSettings() {
+            const isClosed = DOM.settingsModal.classList.contains('translate-y-full');
+            if (isClosed) {
+                DOM.settingsModal.classList.remove('translate-y-full');
+                DOM.settingsOverlay.classList.remove('opacity-0', 'pointer-events-none');
+            } else {
+                DOM.settingsModal.classList.add('translate-y-full');
+                DOM.settingsOverlay.classList.add('opacity-0', 'pointer-events-none');
+            }
+        }
+
+        DOM.btnSettings.addEventListener('click', toggleSettings);
+        DOM.btnCloseSettings.addEventListener('click', toggleSettings);
+        DOM.settingsOverlay.addEventListener('click', toggleSettings);
+
+        // 字型切換
+        DOM.fontOptions.forEach(option => {
+            option.addEventListener('click', function() {
+                DOM.fontOptions.forEach(opt => opt.classList.remove('active'));
+                this.classList.add('active');
+                
+                const newFont = this.getAttribute('data-font');
+                const newTracking = this.getAttribute('data-tracking');
+                DOM.root.style.setProperty('--dynamic-font', newFont);
+                DOM.root.style.setProperty('--dynamic-tracking', newTracking);
+            });
+        });
+
+        // 顏色切換
+        DOM.colorOptions.forEach(option => {
+            option.addEventListener('click', function() {
+                DOM.colorOptions.forEach(opt => opt.classList.remove('active'));
+                this.classList.add('active');
+                
+                const themeKey = this.getAttribute('data-theme');
+                const t = themes[themeKey];
+                
+                DOM.root.style.setProperty('--theme-main', t.main);
+                DOM.root.style.setProperty('--theme-border', t.border);
+                DOM.root.style.setProperty('--theme-dim', t.dim);
+                DOM.root.style.setProperty('--theme-glow', t.glow);
+
+                // 重新渲染按鈕
+                if(isRunning) {
+                    setButtonState('stop');
+                    setButtonState('lap');
+                } else {
+                    if (totalElapsedTime > 0) {
+                        setButtonState('start');
+                        setButtonState('reset');
+                    } else {
+                        setButtonState('start');
+                        setButtonState('lap-disabled');
+                    }
+                }
+            });
+        });
+
+        // === 頂部時鐘更新 ===
+        function updateClock() {
+            const now = new Date();
+            const twTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Taipei"}));
+            
+            const hours = String(twTime.getHours()).padStart(2, '0');
+            const minutes = String(twTime.getMinutes()).padStart(2, '0');
+            const seconds = String(twTime.getSeconds()).padStart(2, '0');
+            const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+            
+            document.getElementById('clock-hm').innerText = `${hours}:${minutes}`;
+            document.getElementById('clock-s').innerText = seconds;
+            document.getElementById('clock-day').innerText = days[twTime.getDay()];
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // === 碼錶核心邏輯 ===
+        let isRunning = false;
+        let totalElapsedTime = 0;      
+        let currentLapElapsedTime = 0; 
+        let lastTickTime = 0;
+        let animationFrameId;
+        let laps = []; 
+
         function formatTime(ms) {
             const totalSeconds = Math.floor(ms / 1000);
             const minutes = Math.floor(totalSeconds / 60);
@@ -142,29 +282,36 @@
             return `${mStr}:${sStr}.${cStr}`;
         }
 
-        // 按鈕樣式設定器
-        function setButtonState(btn, type) {
-            btn.className = "relative w-20 h-20 rounded-full flex justify-center items-center border-2 border-black transition-opacity active:opacity-50 ";
+        // 動態改變按鈕樣式 (使用 CSS 變數)
+        function setButtonState(type) {
+            const baseBtn = "w-16 h-16 md:w-20 md:h-20 rounded-full flex justify-center items-center bg-transparent border-2 font-bold text-lg transition-all ";
             
             if (type === 'start') {
-                btn.className += "bg-[#1a3d1e] text-[#4cd964] ring-2 ring-[#1a3d1e]";
-                btn.innerHTML = '<span class="text-[17px] tracking-wide">開始</span>';
+                DOM.btnRightWrap.className = "btn-wrapper border-theme transition-colors duration-300";
+                DOM.btnRight.className = baseBtn + "border-theme text-theme bg-theme-active box-shadow-theme";
+                DOM.btnRight.innerText = "開始";
             } else if (type === 'stop') {
-                btn.className += "bg-[#33110b] text-[#ff453a] ring-2 ring-[#33110b]";
-                btn.innerHTML = '<span class="text-[17px] tracking-wide">停止</span>';
+                DOM.btnRightWrap.style.borderColor = '#dc2626'; // 固定紅色外框
+                DOM.btnRightWrap.className = "btn-wrapper transition-colors duration-300";
+                DOM.btnRight.className = baseBtn + "border-[#f87171] text-[#f87171] active:bg-[#dc2626]/30 shadow-[0_0_10px_rgba(248,113,113,0.3)]";
+                DOM.btnRight.innerText = "停止";
             } else if (type === 'lap') {
-                btn.className += "bg-[#333333] text-white ring-2 ring-[#333333]";
-                btn.innerHTML = '<span class="text-[17px] tracking-wide">分圈</span>';
+                DOM.btnLeftWrap.className = "btn-wrapper border-theme-dark transition-colors duration-300"; 
+                DOM.btnLeft.className = baseBtn + "border-theme-dark text-theme bg-theme-active";
+                DOM.btnLeft.innerText = "分圈";
             } else if (type === 'lap-disabled') {
-                btn.className += "bg-[#333333] text-white/50 ring-2 ring-[#333333]";
-                btn.innerHTML = '<span class="text-[17px] tracking-wide">分圈</span>';
+                DOM.btnLeftWrap.className = "btn-wrapper border-theme-dark transition-colors duration-300"; 
+                DOM.btnLeftWrap.style.borderColor = 'rgba(255,255,255,0.1)';
+                DOM.btnLeft.className = baseBtn + "text-theme-dark border-transparent";
+                DOM.btnLeft.style.borderColor = 'rgba(255,255,255,0.1)';
+                DOM.btnLeft.innerText = "分圈";
             } else if (type === 'reset') {
-                btn.className += "bg-[#333333] text-white ring-2 ring-[#333333]";
-                btn.innerHTML = '<span class="text-[17px] tracking-wide">重置</span>';
+                DOM.btnLeftWrap.className = "btn-wrapper border-theme-dark transition-colors duration-300";
+                DOM.btnLeft.className = baseBtn + "border-theme-dark text-theme bg-theme-active";
+                DOM.btnLeft.innerText = "重置";
             }
         }
 
-        // 畫面更新迴圈
         function tick() {
             if (isRunning) {
                 const now = Date.now();
@@ -180,13 +327,16 @@
             }
         }
 
-        // 渲染分圈列表
         function renderLaps() {
+            if (laps.length === 0 && !isRunning && totalElapsedTime === 0) {
+                DOM.lapsContainer.innerHTML = '<div class="text-center text-theme opacity-50 text-sm mt-8 tracking-widest transition-colors duration-300">SYSTEM READY</div>';
+                return;
+            }
+
             let html = '';
-            
-            // 找出最快與最慢的圈數 (必須有兩圈已完成才會有紅綠標示)
             let maxTime = -1;
             let minTime = Infinity;
+            
             if (laps.length >= 2) {
                 laps.forEach(lap => {
                     if (lap.lapTime > maxTime) maxTime = lap.lapTime;
@@ -194,31 +344,43 @@
                 });
             }
 
-            // 1. 如果正在計時，或者已經有圈數了，最上面永遠顯示「當前這一圈」
+            // 當前圈
             if (isRunning || laps.length > 0) {
                 const currentLapNum = laps.length + 1;
                 html += `
-                    <div class="flex justify-between items-center py-3 border-b border-gray-800/80 text-[17px] tabular-nums">
-                        <span>第 ${currentLapNum} 圈</span>
-                        <span>${formatTime(currentLapElapsedTime)}</span>
+                    <div class="flex justify-between items-center py-4 border-b border-theme-dark transition-colors duration-300">
+                        <span class="text-theme font-bold text-[17px] tracking-wider transition-colors duration-300">LAP ${currentLapNum}</span>
+                        <span class="text-theme text-xl dynamic-font transition-colors duration-300">${formatTime(currentLapElapsedTime)}</span>
                     </div>
                 `;
             }
 
-            // 2. 由新到舊顯示已完成的分圈
+            // 歷史圈數
             for (let i = laps.length - 1; i >= 0; i--) {
                 const lap = laps[i];
-                let colorClass = 'text-white';
+                let colorClass = 'text-theme opacity-80'; // 預設使用主色稍暗
+                let labelText = '';
+                let borderClass = 'border-theme opacity-80';
                 
                 if (laps.length >= 2) {
-                    if (lap.lapTime === maxTime) colorClass = 'text-red-lap'; // 最慢(紅色)
-                    else if (lap.lapTime === minTime) colorClass = 'text-green-lap'; // 最快(綠色)
+                    if (lap.lapTime === maxTime) {
+                        colorClass = 'text-[#f87171]'; // 最慢圈固定用紅色警示
+                        borderClass = 'border-[#f87171]';
+                        labelText = `<span class="text-[10px] ml-2 border ${borderClass} px-1.5 py-0.5 rounded ${colorClass} tracking-wider">MAX</span>`;
+                    } else if (lap.lapTime === minTime) {
+                        colorClass = 'text-theme font-bold'; // 最快圈用最亮的主色
+                        borderClass = 'border-theme';
+                        labelText = `<span class="text-[10px] ml-2 border ${borderClass} px-1.5 py-0.5 rounded text-theme tracking-wider box-shadow-theme transition-colors duration-300">MIN</span>`;
+                    }
                 }
 
                 html += `
-                    <div class="flex justify-between items-center py-3 border-b border-gray-800/80 text-[17px] tabular-nums ${colorClass}">
-                        <span>第 ${lap.id} 圈</span>
-                        <span>${formatTime(lap.lapTime)}</span>
+                    <div class="flex justify-between items-center py-4 border-b border-theme-dark transition-colors duration-300">
+                        <div class="flex items-center">
+                            <span class="${colorClass} font-bold text-[17px] tracking-wider transition-colors duration-300">LAP ${lap.id}</span>
+                            ${labelText}
+                        </div>
+                        <span class="${colorClass} text-xl dynamic-font transition-colors duration-300">${formatTime(lap.lapTime)}</span>
                     </div>
                 `;
             }
@@ -226,69 +388,63 @@
             DOM.lapsContainer.innerHTML = html;
         }
 
-        // 右鍵 (開始/停止) 事件
         DOM.btnRight.addEventListener('click', () => {
             if (isRunning) {
-                // 停止邏輯
                 isRunning = false;
                 cancelAnimationFrame(animationFrameId);
                 
-                // 準確計算最後一次停下的時間
                 const now = Date.now();
                 const delta = now - lastTickTime;
                 totalElapsedTime += delta;
                 currentLapElapsedTime += delta;
                 DOM.mainTimer.innerText = formatTime(totalElapsedTime);
-                renderLaps(); // 更新畫面確保停在精確數字
+                renderLaps(); 
 
-                setButtonState(DOM.btnRight, 'start');
-                setButtonState(DOM.btnLeft, 'reset');
+                setButtonState('start');
+                setButtonState('reset');
             } else {
-                // 開始邏輯
                 isRunning = true;
                 lastTickTime = Date.now();
                 
-                setButtonState(DOM.btnRight, 'stop');
-                setButtonState(DOM.btnLeft, 'lap');
+                setButtonState('stop');
+                setButtonState('lap');
                 
+                if(laps.length === 0 && currentLapElapsedTime === 0) renderLaps();
                 animationFrameId = requestAnimationFrame(tick);
             }
         });
 
-        // 左鍵 (分圈/重置) 事件
         DOM.btnLeft.addEventListener('click', () => {
             if (isRunning) {
-                // 記錄分圈邏輯
                 const now = Date.now();
-                // 在按下的瞬間將誤差補上
                 const delta = now - lastTickTime;
                 totalElapsedTime += delta;
                 currentLapElapsedTime += delta;
                 lastTickTime = now;
 
-                // 將目前這圈存入陣列
                 laps.push({
                     id: laps.length + 1,
                     lapTime: currentLapElapsedTime,
                     totalTime: totalElapsedTime
                 });
                 
-                // 歸零當前圈時間
                 currentLapElapsedTime = 0; 
                 renderLaps();
                 
             } else {
-                // 如果總時間大於 0 且沒在跑，表示是暫停狀態，左鍵功能為重置
                 if (totalElapsedTime > 0) {
                     totalElapsedTime = 0;
                     currentLapElapsedTime = 0;
                     laps = [];
                     DOM.mainTimer.innerText = "00:00.00";
-                    DOM.lapsContainer.innerHTML = "";
-                    setButtonState(DOM.btnLeft, 'lap-disabled');
+                    renderLaps();
+                    setButtonState('lap-disabled');
                 }
             }
         });
+
+        // 初始化狀態
+        setButtonState('lap-disabled');
 
     </script>
 </body>
