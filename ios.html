@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>iOS 碼錶</title>
+    <!-- 使用 Tailwind CSS 快速建立樣式 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: black;
+            color: white;
+            /* 防止 iOS 上的預設反彈效果與選取 */
+            overscroll-behavior-y: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* 讓數字等寬，避免跳動 */
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* 隱藏捲動軸但保留捲動功能 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* iOS 按鈕外圈效果 */
+        .btn-ring {
+            border: 2px solid transparent;
+            background-clip: padding-box;
+        }
+        
+        /* 最快(綠)與最慢(紅)圈的顏色 */
+        .text-green-lap { color: #34c759; }
+        .text-red-lap { color: #ff3b30; }
+    </style>
+</head>
+<body class="flex flex-col h-screen w-screen overflow-hidden">
+
+    <!-- 頂部狀態列區域 (包含動態台灣時間) - 已放大字體 -->
+    <div class="flex justify-center items-center pt-14 pb-2 px-6">
+        <div id="taiwan-clock" class="text-white text-4xl font-bold tracking-wider bg-gray-800/80 border border-gray-600 px-6 py-2 rounded-full backdrop-blur-md tabular-nums shadow-lg">
+            載入中...
+        </div>
+    </div>
+
+    <!-- 主碼錶顯示區 -->
+    <div class="flex justify-center items-center pt-6 pb-10">
+        <h1 id="main-timer" class="text-[5.5rem] font-light tracking-tight tabular-nums" style="font-weight: 200;">00:00.00</h1>
+    </div>
+
+    <!-- 控制按鈕區 -->
+    <div class="flex justify-between px-6 pb-6">
+        <!-- 左邊按鈕：分圈 / 重置 -->
+        <button id="btn-left" class="relative w-20 h-20 rounded-full flex justify-center items-center bg-[#333333] text-white/50 border-2 border-black ring-2 ring-[#333333] transition-opacity active:opacity-50">
+            <span class="text-[17px] tracking-wide">分圈</span>
+        </button>
+
+        <!-- 分頁小圓點 (純裝飾，模仿iOS) -->
+        <div class="flex items-center space-x-2 pb-4">
+            <div class="w-2 h-2 rounded-full bg-white"></div>
+            <div class="w-2 h-2 rounded-full bg-gray-600"></div>
+        </div>
+
+        <!-- 右邊按鈕：開始 / 停止 -->
+        <button id="btn-right" class="relative w-20 h-20 rounded-full flex justify-center items-center bg-[#1a3d1e] text-[#4cd964] border-2 border-black ring-2 ring-[#1a3d1e] transition-opacity active:opacity-50">
+            <span class="text-[17px] tracking-wide">開始</span>
+        </button>
+    </div>
+
+    <!-- 分圈列表區 (可捲動) -->
+    <div class="flex-grow overflow-y-auto no-scrollbar px-4 mb-20 border-t border-gray-800">
+        <div id="laps-container" class="flex flex-col">
+            <!-- 分圈記錄會透過 JS 動態產生在此處 -->
+        </div>
+    </div>
+
+    <!-- 底部導覽列 (純視覺裝飾，重現完整介面) -->
+    <div class="fixed bottom-0 left-0 w-full h-20 bg-black/90 backdrop-blur-lg flex justify-around items-center px-2 pb-6 pt-2 border-t border-gray-800/50">
+        <div class="flex flex-col items-center text-gray-500 space-y-1">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span class="text-[10px]">世界時鐘</span>
+        </div>
+        <div class="flex flex-col items-center text-gray-500 space-y-1">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span class="text-[10px]">鬧鐘</span>
+        </div>
+        <div class="flex flex-col items-center text-[#ff9f0a] space-y-1">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v2"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 5l-1.5 1.5"></path></svg>
+            <span class="text-[10px] font-semibold">碼錶</span>
+        </div>
+        <div class="flex flex-col items-center text-gray-500 space-y-1">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span class="text-[10px]">計時器</span>
+        </div>
+    </div>
+    <!-- iPhone 底部 Home Indicator 空間 -->
+    <div class="fixed bottom-1 left-1/2 -translate-x-1/2 w-32 h-1 bg-white rounded-full"></div>
+
+    <script>
+        // === 頂部台灣時間更新邏輯 ===
+        function updateClock() {
+            const now = new Date();
+            // 指定使用台北時區
+            const options = { timeZone: 'Asia/Taipei', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
+            const timeString = now.toLocaleTimeString('zh-TW', options);
+            document.getElementById('taiwan-clock').innerText = '台灣時間 ' + timeString;
+        }
+        setInterval(updateClock, 1000);
+        updateClock(); // 初始化立即呼叫一次
+
+        // === 碼錶核心邏輯 ===
+        let isRunning = false;
+        let totalElapsedTime = 0;      // 總經過時間 (毫秒)
+        let currentLapElapsedTime = 0; // 當前這圈的經過時間 (毫秒)
+        let lastTickTime = 0;
+        let animationFrameId;
+        
+        // 儲存已完成的分圈
+        // 結構: { id: 1, lapTime: 1234, totalTime: 1234 }
+        let laps = []; 
+
+        const DOM = {
+            mainTimer: document.getElementById('main-timer'),
+            btnLeft: document.getElementById('btn-left'),
+            btnRight: document.getElementById('btn-right'),
+            lapsContainer: document.getElementById('laps-container')
+        };
+
+        // 格式化時間 (將毫秒轉成 MM:SS.ms)
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const centiseconds = Math.floor((ms % 1000) / 10);
+
+            const mStr = minutes.toString().padStart(2, '0');
+            const sStr = seconds.toString().padStart(2, '0');
+            const cStr = centiseconds.toString().padStart(2, '0');
+
+            return `${mStr}:${sStr}.${cStr}`;
+        }
+
+        // 按鈕樣式設定器
+        function setButtonState(btn, type) {
+            btn.className = "relative w-20 h-20 rounded-full flex justify-center items-center border-2 border-black transition-opacity active:opacity-50 ";
+            
+            if (type === 'start') {
+                btn.className += "bg-[#1a3d1e] text-[#4cd964] ring-2 ring-[#1a3d1e]";
+                btn.innerHTML = '<span class="text-[17px] tracking-wide">開始</span>';
+            } else if (type === 'stop') {
+                btn.className += "bg-[#33110b] text-[#ff453a] ring-2 ring-[#33110b]";
+                btn.innerHTML = '<span class="text-[17px] tracking-wide">停止</span>';
+            } else if (type === 'lap') {
+                btn.className += "bg-[#333333] text-white ring-2 ring-[#333333]";
+                btn.innerHTML = '<span class="text-[17px] tracking-wide">分圈</span>';
+            } else if (type === 'lap-disabled') {
+                btn.className += "bg-[#333333] text-white/50 ring-2 ring-[#333333]";
+                btn.innerHTML = '<span class="text-[17px] tracking-wide">分圈</span>';
+            } else if (type === 'reset') {
+                btn.className += "bg-[#333333] text-white ring-2 ring-[#333333]";
+                btn.innerHTML = '<span class="text-[17px] tracking-wide">重置</span>';
+            }
+        }
+
+        // 畫面更新迴圈
+        function tick() {
+            if (isRunning) {
+                const now = Date.now();
+                const delta = now - lastTickTime;
+                totalElapsedTime += delta;
+                currentLapElapsedTime += delta;
+                lastTickTime = now;
+
+                DOM.mainTimer.innerText = formatTime(totalElapsedTime);
+                renderLaps(); 
+                
+                animationFrameId = requestAnimationFrame(tick);
+            }
+        }
+
+        // 渲染分圈列表
+        function renderLaps() {
+            let html = '';
+            
+            // 找出最快與最慢的圈數 (必須有兩圈已完成才會有紅綠標示)
+            let maxTime = -1;
+            let minTime = Infinity;
+            if (laps.length >= 2) {
+                laps.forEach(lap => {
+                    if (lap.lapTime > maxTime) maxTime = lap.lapTime;
+                    if (lap.lapTime < minTime) minTime = lap.lapTime;
+                });
+            }
+
+            // 1. 如果正在計時，或者已經有圈數了，最上面永遠顯示「當前這一圈」
+            if (isRunning || laps.length > 0) {
+                const currentLapNum = laps.length + 1;
+                html += `
+                    <div class="flex justify-between items-center py-3 border-b border-gray-800/80 text-[17px] tabular-nums">
+                        <span>第 ${currentLapNum} 圈</span>
+                        <span>${formatTime(currentLapElapsedTime)}</span>
+                    </div>
+                `;
+            }
+
+            // 2. 由新到舊顯示已完成的分圈
+            for (let i = laps.length - 1; i >= 0; i--) {
+                const lap = laps[i];
+                let colorClass = 'text-white';
+                
+                if (laps.length >= 2) {
+                    if (lap.lapTime === maxTime) colorClass = 'text-red-lap'; // 最慢(紅色)
+                    else if (lap.lapTime === minTime) colorClass = 'text-green-lap'; // 最快(綠色)
+                }
+
+                html += `
+                    <div class="flex justify-between items-center py-3 border-b border-gray-800/80 text-[17px] tabular-nums ${colorClass}">
+                        <span>第 ${lap.id} 圈</span>
+                        <span>${formatTime(lap.lapTime)}</span>
+                    </div>
+                `;
+            }
+
+            DOM.lapsContainer.innerHTML = html;
+        }
+
+        // 右鍵 (開始/停止) 事件
+        DOM.btnRight.addEventListener('click', () => {
+            if (isRunning) {
+                // 停止邏輯
+                isRunning = false;
+                cancelAnimationFrame(animationFrameId);
+                
+                // 準確計算最後一次停下的時間
+                const now = Date.now();
+                const delta = now - lastTickTime;
+                totalElapsedTime += delta;
+                currentLapElapsedTime += delta;
+                DOM.mainTimer.innerText = formatTime(totalElapsedTime);
+                renderLaps(); // 更新畫面確保停在精確數字
+
+                setButtonState(DOM.btnRight, 'start');
+                setButtonState(DOM.btnLeft, 'reset');
+            } else {
+                // 開始邏輯
+                isRunning = true;
+                lastTickTime = Date.now();
+                
+                setButtonState(DOM.btnRight, 'stop');
+                setButtonState(DOM.btnLeft, 'lap');
+                
+                animationFrameId = requestAnimationFrame(tick);
+            }
+        });
+
+        // 左鍵 (分圈/重置) 事件
+        DOM.btnLeft.addEventListener('click', () => {
+            if (isRunning) {
+                // 記錄分圈邏輯
+                const now = Date.now();
+                // 在按下的瞬間將誤差補上
+                const delta = now - lastTickTime;
+                totalElapsedTime += delta;
+                currentLapElapsedTime += delta;
+                lastTickTime = now;
+
+                // 將目前這圈存入陣列
+                laps.push({
+                    id: laps.length + 1,
+                    lapTime: currentLapElapsedTime,
+                    totalTime: totalElapsedTime
+                });
+                
+                // 歸零當前圈時間
+                currentLapElapsedTime = 0; 
+                renderLaps();
+                
+            } else {
+                // 如果總時間大於 0 且沒在跑，表示是暫停狀態，左鍵功能為重置
+                if (totalElapsedTime > 0) {
+                    totalElapsedTime = 0;
+                    currentLapElapsedTime = 0;
+                    laps = [];
+                    DOM.mainTimer.innerText = "00:00.00";
+                    DOM.lapsContainer.innerHTML = "";
+                    setButtonState(DOM.btnLeft, 'lap-disabled');
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
